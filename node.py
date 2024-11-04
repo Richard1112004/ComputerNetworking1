@@ -8,6 +8,10 @@ import time
 from TCPlimit import TCPlimit
 import datetime
 import os
+import math
+import hashlib
+import json
+from flask import Flask, request, jsonify
 call = time.time()
 count = 0
 class Node:
@@ -124,7 +128,7 @@ class Node:
         if count != 0:
             msg = Node_to_Tracker(node_id=self.node_id,
                                 mode=config.tracker_requests["REQUEST"],
-                                filename="", metadata="")
+                                metadata="")
 
             self.send_segment(sock=self.send_socket,
                             data=msg.encode())
@@ -135,7 +139,7 @@ class Node:
     def go_torrent(self):
         msg = Node_to_Tracker(node_id=self.node_id,
                            mode=config.tracker_requests["REQUEST"],
-                           filename="", metadata="")
+                            metadata="")
 
         addr = tuple(config.const["TRACKER_ADDR"])
         ip, track_port = addr
@@ -143,12 +147,48 @@ class Node:
         print(f"Connected to server at {ip}:{track_port}")
         self.send_segment(sock=self.send_socket,
                           data=Data.encode(msg))
+        data = self.send_socket.recv(config.const["BUFFER_SIZE"])
+        msg = Data.decode(data)
+        return msg
+    def create_info_dict(self, file_name):
+        with open(file_name, 'rb') as file:
+            file_data = file.read()
+        info_dict = {
+                'name': file_name,
+                'length': len(file_data),
+                'piece length': 512,
+                'pieces_count': math.ceil(len(file_data)/512) 
+        }
+        return info_dict
+    def get_DotTorrent(self, directory_path):
+        files = os.listdir(directory_path)
+        info_arr = []
+        for file in files:
+            full_path = os.path.join(directory_path, file)  
+            info_arr.append(self.create_info_dict(full_path))  
+        torrent = {
+            "IP" : "localhost",
+            "info" : info_arr,
+        }
+        return torrent
+    def update(self, directory_path):
+        metadata = self.get_DotTorrent(directory_path)
+        msg = Node_to_Tracker(node_id=self.node_id,
+                            mode=config.tracker_requests["UPDATE"],
+                            metadata=metadata)
+
+        self.send_segment(sock=self.send_socket,
+                            data=msg.encode())  
         
+        
+    
 
         
 def run (args):
+
     node = Node(node_id=args.node_id,recieve_port=create_random_port(), send_port=create_random_port())
-    node.go_torrent()
+    metadata = node.go_torrent()
+    print(metadata)
     print("You're in program")
     timer_thread = Thread(target=node.inform_tracker_periodically, args=(config.const["NODE_TIME_INTERVAL"],))
     timer_thread.daemon = True
@@ -156,17 +196,19 @@ def run (args):
     print("ENTER YOUR COMMAND!")
     while True:
         command = input()
-        mode, filename = command(command)
+        mode, torrent = parse_command(command)
 
         #################### send mode ####################
         if mode == 'update':
-            print("update")
-        #################### download mode ####################
-        elif mode == 'download':                
-            # phuc hung
-            t = Thread(target=node.download, args=(filename,))
-            t.setDaemon(True)
+            t = Thread(target=node.update, args=(torrent,))
+            t.daemon = True
             t.start()
+        #################### download mode ####################
+        # elif mode == 'download':                
+        #     # phuc hung
+        #     t = Thread(target=node.download, args=(torrent))
+        #     t.setDaemon(True)
+        #     t.start()
         #################### exit mode ####################
         elif mode == 'exit':
             print("exit")

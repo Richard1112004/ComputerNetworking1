@@ -1,0 +1,40 @@
+Additional Considerations
+Check if the File Exists: Before trying to open the file, you can add a check to see if the file exists, which can help prevent FileNotFoundError in the future.
+
+Error Handling: It might be helpful to wrap the file opening code in a try-except block to handle potential errors more gracefully. Here’s an example:
+
+python
+Copy code
+def create_info_dict(self, file_name):
+    try:
+        with open(file_name, 'rb') as file:
+            file_data = file.read()
+        info_dict = {
+            'name': file_name,
+            'length': len(file_data),
+            'piece length': 512,
+            'pieces_count': math.ceil(len(file_data) / 512)
+        }
+        return info_dict
+    except FileNotFoundError:
+        print(f"Error: The file '{file_name}' was not found.")
+        return None
+
+
+        "PS C:\Users\dell\Desktop\BKnam3ki1\Computer network\assignment\code> python3 node.py 3 
+Connected to server at localhost:12345
+You're in program
+2024-11-04 15:21:51 - Node 3 is still alive in the torrent!
+ENTER YOUR COMMAND!
+update C:\Users\dell\Desktop
+Exception in thread Thread-3 (get_DotTorrent):
+Traceback (most recent call last):
+  File "C:\msys64\mingw64\lib\python3.10\threading.py", line 1016, in _bootstrap_inner
+    self.run()
+  File "C:\msys64\mingw64\lib\python3.10\threading.py", line 953, in run      
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\dell\Desktop\BKnam3ki1\Computer network\assignment\code\node.py", line 164, in get_DotTorrent
+    info_arr.append(self.create_info_dict(file))
+  File "C:\Users\dell\Desktop\BKnam3ki1\Computer network\assignment\code\node.py", line 151, in create_info_dict
+    with open(file_name, 'rb') as file:
+FileNotFoundError: [Errno 2] No such file or directory: '2022_MT_KHMT (3).pdf'"

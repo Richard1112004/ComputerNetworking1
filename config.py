@@ -19,7 +19,7 @@ class Config:
         }
         self.tracker_requests = {
             "REQUEST": 0,
-            # "OWN": 1,
+            "UPDATE": 1,
             "DOWNLOAD": 2,
             # "UPDATE": 3,
             # "EXIT": 4

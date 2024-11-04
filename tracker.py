@@ -6,6 +6,7 @@ from collections import defaultdict
 from transmit.data import Data
 import time
 import json
+from TCPlimit import TCPlimit
 call = time.time()
 class Tracker:
     def __init__(self):
@@ -13,7 +14,8 @@ class Tracker:
         self.has_informed_tracker = defaultdict(bool)
         self.file_owners_list = defaultdict(list)
         self.send_freq_list = defaultdict(int)
-        
+        self.send_peer_list = []
+        self.info_peers = []
     def search_file(self, msg: dict, addr: tuple):
         print(f"Node{msg['node_id']} is searching for {msg['filename']}")
         # fix this
@@ -23,27 +25,53 @@ class Tracker:
             matched_entries.append((entry, self.send_freq_list[entry['node_id']]))
 
         tracker_response = Tracker_to_Node(dest_node_id=msg['node_id'],
-                                        result=matched_entries,
-                                        filename=msg['filename'])
+                                        result=matched_entries)
 
         self.send_segment(sock=self.tracker_socket,
                           data=tracker_response.encode(),
                           addr=addr)
-    def handle(self, data: bytes, addr: tuple):
+    def create_info_peer(self, msg: dict, addr: tuple):
+        info_peer = {
+                'peer_id': msg['node_id'],
+                'ip': addr[0],
+                'port': addr[1],
+                'metadata': msg['metadata'] 
+        }
+        self.info_peers.append(info_peer)
+    def add_file_owner(self, msg: dict, addr: tuple):
+        entry = {
+            'node_id': msg['node_id'],
+            'addr': addr
+        }
+        metadata_key = json.dumps(msg['metadata'], sort_keys=True)  
+        if metadata_key not in self.file_owners_list:
+            self.file_owners_list[metadata_key] = []  
+        self.file_owners_list[metadata_key].append(json.dumps(entry))
+        self.file_owners_list[metadata_key] = list(set(self.file_owners_list[metadata_key]))
+        if msg['node_id'] not in self.send_freq_list:
+            self.send_freq_list[msg['node_id']] = 0  
+        self.send_freq_list[msg['node_id']] += 1
+        self.create_info_peer(msg, addr)
+        if msg['node_id'] not in self.send_peer_list:
+            self.send_peer_list.append(msg['node_id'])
+        print(self.file_owners_list)
+    
+    def handle(self, data: bytes, addr: tuple, conn: socket.socket):
         msg = Data.decode(data)
         mode = msg['mode']
-        # if mode == config.tracker_requests_mode.OWN:
-        #     self.add_file_owner(msg=msg, addr=addr)
+        if mode == config.tracker_requests["UPDATE"]:
+            self.add_file_owner(msg=msg, addr=addr)
         if mode == config.tracker_requests["DOWNLOAD"]:
             self.search_file(msg=msg, addr=addr)
         # elif mode == config.tracker_requests_mode.UPDATE:
         #     self.update_db(msg=msg)
         if mode == config.tracker_requests["REQUEST"]:
             self.has_informed_tracker[(msg['node_id'], addr)] = True
+            self.respond_tracker(msg['node_id'], conn=conn)
         # elif mode == config.tracker_requests_mode.EXIT:
         #     self.remove_node(node_id=msg['node_id'], addr=addr)
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"{current_time} - Node {msg['node_id']} exited torrent")
+        print(f"{current_time} - Node {msg['node_id']} in torrent")
     # def remove_node(self, node_id: int, addr: tuple):
     #     entry = {
     #         'node_id': node_id,
@@ -60,8 +88,28 @@ class Tracker:
     #             self.file_owners_list[nf].remove(json.dumps(entry))
     #         if len(self.file_owners_list[nf]) == 0:
     #             self.file_owners_list.pop(nf)
+    def send_segment(self, sock: socket.socket, data: bytes):
+        # sock.connect((ip, track_port))
+        # print(f"Connected to server at {ip}:{track_port}")
+        segment = TCPlimit(
+            data=data
+        )
+        encrypted_data = segment.data  
+        sock.sendall(encrypted_data)
+    def createResDict(self):
+        torrent = {
+            "fail" : "",
+            "warning": "",
+            "peers" : self.info_peers
+        }
+        return torrent
 
+    def respond_tracker(self, node_id: int, conn: socket.socket):
+        torrent = self.createResDict()
+        msg = Tracker_to_Node(dest_node_id=node_id, result=torrent)
+        self.send_segment(sock=conn,data=msg.encode())
 
+        
     def check_nodes_periodically(self, interval: int):
         alive_nodes = set()
         dead_nodes = set()
@@ -97,7 +145,7 @@ class Tracker:
                     break  # Exit loop if no data (client closed connection)
 
                 # Process the data in a new thread
-                t = Thread(target=self.handle, args=(data, addr))
+                t = Thread(target=self.handle, args=(data, addr, conn))
                 t.start()
         print(f"Connection closed with {addr}")
     def listen(self):

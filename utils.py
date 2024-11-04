@@ -26,7 +26,7 @@ def create_random_port() -> int:
 
     return rand_port
 
-def command(command: str):
+def parse_command(command: str):
     parts = command.split(' ')
     try:
         parts = command.split(maxsplit=1)  # Split the command into two parts: mode and filename
