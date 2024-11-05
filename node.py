@@ -179,14 +179,15 @@ class Node:
 
         self.send_segment(sock=self.send_socket,
                             data=msg.encode())  
-        
-        
-    
+
 
         
 def run (args):
 
     node = Node(node_id=args.node_id,recieve_port=create_random_port(), send_port=create_random_port())
+    print('Connecting to: {}:{:d}'.format(args.s, args.p))
+    client_socket = socket.socket()
+    client_socket.connect((args.s, args.p))    
     metadata = node.go_torrent()
     print(metadata)
     print("You're in program")
@@ -216,7 +217,16 @@ def run (args):
             print("Try again. Mode(update, download, exit) <space> File_name")
         
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+                        prog='Client',
+                        description='Connect to tracker',
+                        epilog='!!!It requires the server is running and listening!!!')
+    # Use for the client to connect to tracker
+    parser.add_argument('-s', required=True, metavar="SERVER_IP",help='Địa chỉ IP của server')
+    parser.add_argument('-p', type=int, required=True,metavar='SERVER_PORT', help='Cổng của server')
+
     parser.add_argument('node_id', type=int)
     node_args = parser.parse_args()
+    server_ip = node_args.s
+    port = node_args.p
     run(args=node_args)

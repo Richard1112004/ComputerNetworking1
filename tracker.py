@@ -10,6 +10,7 @@ from TCPlimit import TCPlimit
 call = time.time()
 class Tracker:
     def __init__(self):
+        self.port = get_random_unused_port()[1]
         self.tracker_socket = set_socket(config.const["TRACKER_ADDR"][1])
         self.has_informed_tracker = defaultdict(bool)
         self.file_owners_list = defaultdict(list)
@@ -72,22 +73,22 @@ class Tracker:
         #     self.remove_node(node_id=msg['node_id'], addr=addr)
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"{current_time} - Node {msg['node_id']} in torrent")
-    # def remove_node(self, node_id: int, addr: tuple):
-    #     entry = {
-    #         'node_id': node_id,
-    #         'addr': addr
-    #     }
-    #     try:
-    #         self.send_freq_list.pop(node_id)
-    #     except KeyError:
-    #         pass
-    #     self.has_informed_tracker.pop((node_id, addr))
-    #     node_files = self.file_owners_list.copy()
-    #     for nf in node_files:
-    #         if json.dumps(entry) in self.file_owners_list[nf]:
-    #             self.file_owners_list[nf].remove(json.dumps(entry))
-    #         if len(self.file_owners_list[nf]) == 0:
-    #             self.file_owners_list.pop(nf)
+    def remove_node(self, node_id: int, addr: tuple):
+        entry = {
+            'node_id': node_id,
+            'addr': addr
+        }
+        try:
+            self.send_freq_list.pop(node_id)
+        except KeyError:
+            pass
+        self.has_informed_tracker.pop((node_id, addr))
+        node_files = self.file_owners_list.copy()
+        for nf in node_files:
+            if json.dumps(entry) in self.file_owners_list[nf]:
+                self.file_owners_list[nf].remove(json.dumps(entry))
+            if len(self.file_owners_list[nf]) == 0:
+                self.file_owners_list.pop(nf)
     def send_segment(self, sock: socket.socket, data: bytes):
         # sock.connect((ip, track_port))
         # print(f"Connected to server at {ip}:{track_port}")
@@ -153,24 +154,47 @@ class Tracker:
         timer_thread.daemon = True
         timer_thread.start()
         self.tracker_socket.listen() 
-        print(f"Tracker server listening on {config.const['TRACKER_ADDR'][1]}")
+        # print(f"Tracker server listening on {config.const['TRACKER_ADDR'][1]}")
 
         
         while True:
             # Accept a new connection
-            conn, addr = self.tracker_socket.accept()
-            print(f"Connection established with {addr}")
+            
+            # code này kp của t nên cmt lại
+            # conn, addr = self.tracker_socket.accept()
+            hostname = socket.gethostname()
+            hostip = get_host_default_interface_ip()
+            print("Listening on: {}:{}:{}".format(hostname,hostip,self.port))
+            serversocket = socket.socket()
+            serversocket.bind((hostname, self.port))
+
+            serversocket.listen(10)
+            conn, addr = serversocket.accept()
+            print(f"Connection established with {addr, conn}")
 
             # Start a new thread to handle the connection
             client_thread = Thread(target=self.handle_client, args=(conn, addr))
             client_thread.daemon = True  # This ensures threads exit when main program exits
             client_thread.start()
     def run(self):
-        print("Tracker start at", config.const["TRACKER_ADDR"][1])
+        
+        # print("Tracker start at", config.const["TRACKER_ADDR"][1])
         t = Thread(target=self.listen())
         t.daemon = True
         t.start()
         t.join()
+
+# get_host_default_interface_ip uses UDP socket to check if the socket is working
+def get_host_default_interface_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+       s.connect(('8.8.8.8',1))
+       ip = s.getsockname()[0]
+    except Exception:
+       ip = '127.0.0.1'
+    finally:
+       s.close()
+    return ip    
 
 if __name__ == '__main__':
     t = Tracker()
