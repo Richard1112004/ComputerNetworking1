@@ -11,115 +11,37 @@ import os
 import math
 import hashlib
 import json
-from flask import Flask, request, jsonify
+# from flask import Flask, request, jsonify
 call = time.time()
 count = 0
 class Node:
-    def __init__(self, node_id: int, recieve_port: int, send_port: int):
+    def __init__(self, node_id: int, recieve_port: int, send_port: int, socket: socket.socket, tracker_ip):
         self.node_id = node_id
-        self.recieve_socket = set_socket(recieve_port)
-        self.send_socket = set_socket(send_port) 
+        self.tracker_ip = tracker_ip
+        self.receive_port = recieve_port
+        self.send_port = send_port
+        # self.recieve_socket = set_socket(recieve_port)
+        # self.send_socket = set_socket(send_port) 
+        self.send_socket = socket
+        self.is_in_send_mode = False    # is thread uploading a file or not
+        self.downloaded_files = {}        
+
     def send_segment(self, sock: socket.socket, data: bytes):
         # sock.connect((ip, track_port))
-        # print(f"Connected to server at {ip}:{track_port}")
+        # print(f"Connected to server at {}:{track_port}")
         segment = TCPlimit(
             data=data
         )
+        print("sending segment")
         encrypted_data = segment.data  
         sock.sendall(encrypted_data)
-    # def ask_file_size(self, filename: str, file_owner: tuple) -> int:
-    #     temp_port = create_random_port()
-    #     temp_sock = set_socket(temp_port)
-    #     dest_node = file_owner[0]
-
-    #     msg = Node_to_Node(src_node_id=self.node_id,
-    #                     dest_node_id=dest_node["node_id"],
-    #                     filename=filename)
-    #     self.send_segment(sock=temp_sock,
-    #                       data=msg.encode(),
-    #                       addr=tuple(dest_node["addr"]))
-    #     while True:
-    #         data, addr = temp_sock.recvfrom(config.constants.BUFFER_SIZE)
-    #         dest_node_response = Data.decode(data)
-    #         size = dest_node_response["size"]
-    #         free_socket(temp_sock)
-
-    #         return size
-    # def split(self, file_owners: list, filename: str):
-    #     owners = []
-    #     for owner in file_owners:
-    #         if owner[0]['node_id'] != self.node_id:
-    #             owners.append(owner)
-    #     if len(owners) == 0:
-    #         print(f"NoOne has {filename}")
-    #         return
-    #     # sort owners based on their sending frequency
-    #     owners = sorted(owners, key=lambda x: x[1], reverse=True)
-    #     # if MAX_SPLITTNES_RATE is 3, then to_be_used_owners will 
-    #     # contain only the top 3 owners with the highest send frequency.
-    #     to_be_used_owners = owners[:config.const["MAX_SPLITTNES_RATE"]]
-    #     # stop here
-    #     # 1. first ask the size of the file from peers
-    #     print(f"You are going to download {filename} from Node(s) {[o[0]['node_id'] for o in to_be_used_owners]}")
-    #     file_size = self.ask_file_size(filename=filename, file_owner=to_be_used_owners[0])
-    #     print(f"The file {filename} which you are about to download, has size of {file_size} bytes")
-
-    #     # 2. Now, we know the size, let's split it equally among peers to download chunks of it from them
-    #     step = file_size / len(to_be_used_owners)
-    #     chunks_ranges = [(round(step*i), round(step*(i+1))) for i in range(len(to_be_used_owners))]
-
-    #     # 3. Create a thread for each neighbor peer to get a chunk from it
-    #     self.downloaded_files[filename] = []
-    #     neighboring_peers_threads = []
-    #     for idx, obj in enumerate(to_be_used_owners):
-    #         t = Thread(target=self.receive_chunk, args=(filename, chunks_ranges[idx], obj))
-    #         t.setDaemon(True)
-    #         t.start()
-    #         neighboring_peers_threads.append(t)
-    #     for t in neighboring_peers_threads:
-    #         t.join()
-
-    #     print("All the chunks of {} has downloaded from neighboring peers. But they must be reassembled!".format(filename))
-
-    #     # 4. Now we have downloaded all the chunks of the file. It's time to sort them.
-    #     sorted_chunks = self.sort_downloaded_chunks(filename=filename)
-    #     print(f"All the pieces of the {filename} is now sorted and ready to be reassembled.")
-
-    #     # 5. Finally, we assemble the chunks to re-build the file
-    #     total_file = []
-    #     file_path = f"{config.directory.node_files_dir}node{self.node_id}/{filename}"
-    #     for chunk in sorted_chunks:
-    #         for piece in chunk:
-    #             total_file.append(piece["chunk"])
-    #     self.reassemble_file(chunks=total_file,
-    #                          file_path=file_path)
-    #     print(f"{filename} has successfully downloaded and saved in my files directory.")
-    #     self.files.append(filename)
-    # def search(self, filename: str) -> dict:
-    #     msg = Node_to_Tracker(node_id=self.node_id,
-    #                        mode=config.tracker_requests["DOWNLOAD"],
-    #                        filename=filename)
-    #     port = create_random_port()
-    #     search_sock = set_socket(port)
-    #     self.send_segment(sock=search_sock,
-    #                       data=msg.encode(),
-    #                       addr=tuple(config.const["TRACKER_ADDR"]))
-    #     while True:
-    #         data, addr = search_sock.recvfrom(config.const["BUFFER_SIZE"])
-    #         from_tracker = Data.decode(data)
-    #         return from_tracker
-    # def download(self, filename: str):
-    #     # I will fix later
-    #     file_path = f"{config.dir["node_dir"]}node{self.node_id}/{filename}"
-    #     if os.path.isfile(file_path):
-    #         print(f"You already have this one!")
-    #         return
-    #     else:
-    #         print(f"Let's search file in torrent!")
-    #         response = self.search(filename=filename)
-    #         file_owners = response['result']
-    #         # stop here
-    #         self.split(file_owners=file_owners, filename=filename)
+        print("sent")
+        # response = sock.recv(config.const["BUFFER_SIZE"])  
+        # if response:
+        #     print("Server has received the data:")
+        # else:
+        #     print("No response from server.")
+   
     def inform_tracker_periodically(self, interval: int):
         # Update and print the current time for each call
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -136,19 +58,24 @@ class Node:
         # Schedule the next call
         count = count+1
         Timer(interval, self.inform_tracker_periodically, args=(interval,)).start()
-    def go_torrent(self):
+    def go_torrent(self, ip, port):
         msg = Node_to_Tracker(node_id=self.node_id,
                            mode=config.tracker_requests["REQUEST"],
                             metadata="")
 
-        addr = tuple(config.const["TRACKER_ADDR"])
-        ip, track_port = addr
-        self.send_socket.connect((ip, track_port))
-        print(f"Connected to server at {ip}:{track_port}")
+        # addr = tuple(config.const["TRACKER_ADDR"])
+        # ip, track_port = addr
+        # self.send_socket.connect((ip, track_port))
+        # print(f"Connected to server at {ip}:{track_port}")
+
+        # self.send_socket.connect((ip, port))
+        print(f"Connected to server at {ip}:{port}")
         self.send_segment(sock=self.send_socket,
                           data=Data.encode(msg))
-        data = self.send_socket.recv(config.const["BUFFER_SIZE"])
-        msg = Data.decode(data)
+        # data = self.send_socket.recv(config.const["BUFFER_SIZE"])
+        print("f")
+        # msg = Data.decode(data)
+        print("tesst")
         return msg
     def create_info_dict(self, file_name):
         with open(file_name, 'rb') as file:
@@ -179,30 +106,63 @@ class Node:
 
         self.send_segment(sock=self.send_socket,
                             data=msg.encode())  
-        
-        
     
+    def set_send_mode(self, filename: str):
+        # if filename not in self.files:
+            
+        #     return
+        message = Node_to_Tracker(node_id=self.node_id,
+                               mode=config.tracker_requests['UPDATE'],
+                               metadata=filename)
+
+        self.send_segment(sock=self.send_socket,
+                          data=message.encode(),
+                          )
+        print("test")
+        if self.is_in_send_mode:    # has been already in send(upload) mode
+            log_content = f"Some other node also requested a file from you! But you are already in SEND(upload) mode!"
+            # log(node_id=self.node_id, content=log_content)
+            return
+        else:
+            self.is_in_send_mode = True
+            log_content = f"You are free now! You are waiting for other nodes' requests!"
+            # log(node_id=self.node_id, content=log_content)
+            # t = Thread(target=self.listen, args=())
+            # t.setDaemon(True)
+            # t.start()
+
 
         
 def run (args):
 
-    node = Node(node_id=args.node_id,recieve_port=create_random_port(), send_port=create_random_port())
-    metadata = node.go_torrent()
+    print('Connecting to: {}:{:d}'.format(args.s, args.p))
+    client_socket = socket.socket()
+    try:
+        client_socket.connect((args.s, args.p))   
+    except:
+        print( "Could not connect") 
+    node = Node(node_id=args.node_id,recieve_port=args.p, send_port=create_random_port(),socket= client_socket, tracker_ip=args.s)
+
+    metadata = node.go_torrent(args.s, args.p)
+    print("meta data")
     print(metadata)
     print("You're in program")
     timer_thread = Thread(target=node.inform_tracker_periodically, args=(config.const["NODE_TIME_INTERVAL"],))
     timer_thread.daemon = True
     timer_thread.start()
-    print("ENTER YOUR COMMAND!")
+    
     while True:
+        print("ENTER YOUR COMMAND!")
         command = input()
-        mode, torrent = parse_command(command)
+        mode, filename = parse_command(command)
 
         #################### send mode ####################
         if mode == 'update':
-            t = Thread(target=node.update, args=(torrent,))
-            t.daemon = True
-            t.start()
+            print("dddd")
+            node.set_send_mode(filename)
+            # t = Thread(target=node.update, args=(torrent))
+            # t.daemon = True
+            # t.start()
         #################### download mode ####################
         # elif mode == 'download':                
         #     # phuc hung
@@ -216,7 +176,16 @@ def run (args):
             print("Try again. Mode(update, download, exit) <space> File_name")
         
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+                        prog='Client',
+                        description='Connect to tracker',
+                        epilog='!!!It requires the server is running and listening!!!')
+    # Use for the client to connect to tracker
+    parser.add_argument('-s', required=True, metavar="SERVER_IP",help='Địa chỉ IP của server')
+    parser.add_argument('-p', type=int, required=True,metavar='SERVER_PORT', help='Cổng của server')
+
     parser.add_argument('node_id', type=int)
     node_args = parser.parse_args()
+    server_ip = node_args.s
+    port = node_args.p
     run(args=node_args)
