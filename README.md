@@ -11,6 +11,7 @@ This project simulates a peer-to-peer (P2P) file sharing network. It includes th
 
 ### Running the Tracker
 
+
 To start the tracker, run the following command:
 
 python3 tracker.py
@@ -19,4 +20,15 @@ python3 tracker.py
 ### Running the Node
 To start the node, run the following command:
 
-python3 node.py id
+For instructions, use
+```
+python node.py -h
+```
+python3 node.py -s [IP tracker] -p [PORT] [node_id ]
+
+e.g: python3 node.py -s 192.168.1.7 -p 55165 1
+
+```
+update C:\\Code\\MMT_NPD\\ComputerNetworking1\\node\\node1\\hung.txt 
+```
+thay địa chỉ bằng file .torrent cụ thể, file .torrent hiện chưa có 

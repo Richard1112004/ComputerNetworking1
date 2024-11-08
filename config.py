@@ -18,6 +18,7 @@ class Config:
             "TRACKER_TIME_INTERVAL": 30
         }
         self.tracker_requests = {
+            # tại sao lại là update???
             "REQUEST": 0,
             "UPDATE": 1,
             "DOWNLOAD": 2,

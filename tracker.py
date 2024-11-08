@@ -6,6 +6,7 @@ from collections import defaultdict
 from transmit.data import Data
 import time
 import json
+import pickle
 from TCPlimit import TCPlimit
 call = time.time()
 class Tracker:
@@ -44,6 +45,8 @@ class Tracker:
             'node_id': msg['node_id'],
             'addr': addr
         }
+        #! nếu được cho xin cmt nha
+        
         metadata_key = json.dumps(msg['metadata'], sort_keys=True)  
         if metadata_key not in self.file_owners_list:
             self.file_owners_list[metadata_key] = []  
@@ -58,7 +61,10 @@ class Tracker:
         print(self.file_owners_list)
     
     def handle(self, data: bytes, addr: tuple, conn: socket.socket):
+        print("tam")
+        print("eeee")
         msg = Data.decode(data)
+        print("eeeeee")
         mode = msg['mode']
         if mode == config.tracker_requests["UPDATE"]:
             self.add_file_owner(msg=msg, addr=addr)
@@ -142,6 +148,7 @@ class Tracker:
         with conn:
             while True:
                 data = conn.recv(config.const["BUFFER_SIZE"])
+                print("receive")
                 if not data:
                     break  # Exit loop if no data (client closed connection)
 
@@ -155,26 +162,27 @@ class Tracker:
         timer_thread.start()
         self.tracker_socket.listen() 
         # print(f"Tracker server listening on {config.const['TRACKER_ADDR'][1]}")
+        hostname = socket.gethostname()
+        hostip = get_host_default_interface_ip()
+        serversocket = socket.socket()
+        serversocket.bind((hostname, self.port))
+        serversocket.listen(10)
 
-        
         while True:
             # Accept a new connection
             
             # code này kp của t nên cmt lại
             # conn, addr = self.tracker_socket.accept()
-            hostname = socket.gethostname()
-            hostip = get_host_default_interface_ip()
+           
             print("Listening on: {}:{}:{}".format(hostname,hostip,self.port))
-            serversocket = socket.socket()
-            serversocket.bind((hostname, self.port))
+            
 
-            serversocket.listen(10)
             conn, addr = serversocket.accept()
             print(f"Connection established with {addr, conn}")
 
             # Start a new thread to handle the connection
             client_thread = Thread(target=self.handle_client, args=(conn, addr))
-            client_thread.daemon = True  # This ensures threads exit when main program exits
+            # client_thread.daemon = True  # This ensures threads exit when main program exits
             client_thread.start()
     def run(self):
         
