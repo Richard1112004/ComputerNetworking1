@@ -16,45 +16,85 @@ class Tracker:
         self.send_freq_list = defaultdict(int)
         self.send_peer_list = []
         self.info_peers = []
-    def search_file(self, msg: dict, addr: tuple):
-        print(f"Node{msg['node_id']} is searching for {msg['filename']}")
+    def search_file(self, msg: dict, addr: tuple, conn:socket.socket):
+        print(f"Node{msg['node_id']} is searching for {msg['name']}")
         # fix this
-        matched_entries = []
-        for json_entry in self.file_owners_list[msg['filename']]:
-            entry = json.loads(json_entry)
-            matched_entries.append((entry, self.send_freq_list[entry['node_id']]))
+        matched_entries = self.file_owners_list[msg['name']]
 
+        # print(self.file_owners_list)
+        # for i in self.file_owners_list[msg['name']][0]:
+        #     matched_entries.append(i['metadata'] + i['peers'])
+        #     # entry = json.loads(json_entry)
+        #     # matched_entries.append((entry, self.send_freq_list[entry['node_id']]))
+        print(matched_entries)
         tracker_response = Tracker_to_Node(dest_node_id=msg['node_id'],
                                         result=matched_entries)
 
-        self.send_segment(sock=self.tracker_socket,
+        self.send_segment(sock=conn,
                           data=tracker_response.encode(),
-                          addr=addr)
+                          )
     def create_info_peer(self, msg: dict, addr: tuple):
         info_peer = {
+                'name': msg['name'],
                 'peer_id': msg['node_id'],
                 'ip': addr[0],
                 'port': addr[1],
                 'metadata': msg['metadata'] 
         }
+        
         self.info_peers.append(info_peer)
     def add_file_owner(self, msg: dict, addr: tuple):
         entry = {
             'node_id': msg['node_id'],
             'addr': addr
         }
-        metadata_key = json.dumps(msg['metadata'], sort_keys=True)  
-        if metadata_key not in self.file_owners_list:
-            self.file_owners_list[metadata_key] = []  
-        self.file_owners_list[metadata_key].append(json.dumps(entry))
-        self.file_owners_list[metadata_key] = list(set(self.file_owners_list[metadata_key]))
+        name = msg['name']
+        metadata = msg['metadata']
+        
+        # Nếu name chưa có trong file_owners_list, tạo mới một danh sách
+        if name not in self.file_owners_list:
+            self.file_owners_list[name] = []  # Khởi tạo 'name' là một danh sách rỗng
+            self.file_owners_list[name].append({
+                'metadata': metadata,
+                'peers': [entry]  # Khởi tạo 'peers' là một danh sách chứa entry
+            })
+        else:
+            # Nếu name đã có trong file_owners_list
+            existing_entry = self.file_owners_list[name][0]
+            # Đảm bảo 'peers' là một danh sách, rồi thêm 'entry' vào đó
+            
+            existing_entry['peers'].append(entry)  # Thêm 'entry' vào danh sách 'peers'
+
+
+        # self.file_owners_list['peers'].append(json.dumps(entry))
+        # if name not in self.file_owners_list['name']:
+        #     self.file_owners_list['metadata'].append(metadata)
+        
         if msg['node_id'] not in self.send_freq_list:
             self.send_freq_list[msg['node_id']] = 0  
         self.send_freq_list[msg['node_id']] += 1
         self.create_info_peer(msg, addr)
         if msg['node_id'] not in self.send_peer_list:
             self.send_peer_list.append(msg['node_id'])
+       
         print(self.file_owners_list)
+        
+        # name = json.dumps(msg['name'], sort_keys=True)  
+        # metadata_key = json.dumps(msg['metadata'], sort_keys=True)  
+
+        # if name not in self.file_owners_list:
+        #     self.file_owners_list[name] = []  
+        # self.file_owners_list[name].append(json.dumps(entry))
+        # self.file_owners_list[name] = list(set(self.file_owners_list[metadata_key]))
+        
+        # if msg['node_id'] not in self.send_freq_list:
+        #     self.send_freq_list[msg['node_id']] = 0  
+        # self.send_freq_list[msg['node_id']] += 1
+        # self.create_info_peer(msg, addr)
+        # if msg['node_id'] not in self.send_peer_list:
+        #     self.send_peer_list.append(msg['node_id'])
+       
+        # print(self.file_owners_list)
     
     def handle(self, data: bytes, addr: tuple, conn: socket.socket):
         msg = Data.decode(data)
@@ -62,7 +102,7 @@ class Tracker:
         if mode == config.tracker_requests["UPDATE"]:
             self.add_file_owner(msg=msg, addr=addr)
         if mode == config.tracker_requests["DOWNLOAD"]:
-            self.search_file(msg=msg, addr=addr)
+            self.search_file(msg=msg, addr=addr, conn=conn)
         # elif mode == config.tracker_requests_mode.UPDATE:
         #     self.update_db(msg=msg)
         if mode == config.tracker_requests["REQUEST"]:
